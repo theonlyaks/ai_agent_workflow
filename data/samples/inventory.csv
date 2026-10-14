@@ -1,0 +1,17 @@
+sku,product_name,category,current_stock,minimum_stock,unit_cost,supplier,lead_time_days
+SKU-1001,Classic Cotton T-Shirt,Apparel,120.0,50,6.5,CottonCo,7
+SKU-1002,Classic Cotton T-Shirt,Apparel,18.0,40,6.5,CottonCo,7
+SKU-1003,Slim Fit Denim Jeans,Apparel,35.0,30,22.0,DenimWorks,14
+SKU-1004,Wool Blend Sweater,Apparel,8.0,25,30.0,KnitHouse,21
+SKU-1005,Leather Belt,Accessories,60.0,20,9.0,LeatherLine,10
+SKU-1006,Canvas Tote Bag,Accessories,12.0,15,7.0,BagMakers,7
+SKU-1007,Running Sneakers,Footwear,0.0,20,41.0,Stride Supply,14
+SKU-1008,Hiking Boots,Footwear,22.0,22,58.0,Stride Supply,14
+SKU-1009,Silk Scarf,Accessories,45.0,10,12.0,SilkRoad,30
+SKU-1010,Waterproof Rain Jacket,Outerwear,5.0,15,70.0,RainGear,12
+SKU-1011,Puffer Vest,Outerwear,30.0,12,33.0,RainGear,12
+SKU-1012,Linen Shirt,Apparel,14.0,20,18.0,LinenLab,10
+SKU-1013,Baseball Cap,Accessories,75.0,25,5.0,CapCo,5
+SKU-1014,Ankle Socks (3-Pack),Apparel,200.0,100,3.5,CottonCo,7
+SKU-1015,Yoga Leggings,Activewear,9.0,30,20.0,Flexa Mfg,9
+SKU-1016,Sports Bra,Activewear,,20,14.0,Flexa Mfg,9

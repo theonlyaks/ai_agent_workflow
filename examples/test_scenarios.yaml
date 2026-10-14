@@ -1,0 +1,61 @@
+# Scripted conversations used by `workflow-agent test-questions` (results -> outputs/results/).
+#
+# follow_ups: answers given when the agent asks a question during an Excel Test_Questions run.
+#             Several test requests are intentionally incomplete ("this product", "this task",
+#             "the new collection" without goal/dates) - the correct behaviour is to ASK first.
+# edge_cases: extra requests that exercise conditions and error handling.
+
+follow_ups:
+  WF004:
+    - "The Merino Wool Turtleneck - category Knitwear, 100% merino wool, charcoal colour, relaxed fit with ribbed cuffs, for men and women who want a warm layering piece."
+  WF007:
+    - "Goal: increase online sales of the Autumn 2026 new collection by 25%. Dates: 2026-11-01 to 2026-11-30. Audience: style-conscious shoppers aged 25-40. Promotion: 15% off for newsletter subscribers."
+  WF009:
+    - "T-201 - the payment API timeouts"
+
+edge_cases:
+  - id: WF005_unknown_order_then_email
+    workflow_id: WF005
+    request: "Where is order ORD-9999?"
+    replies: ["Hmm, then please check jane.doe@example.com"]
+    check: "Missing-order handling: asks for another identifier, then resumes with the email"
+
+  - id: WF005_invalid_identifier
+    workflow_id: WF005
+    request: "What's the status of my order 12345?"
+    replies: ["ORD-1005"]
+    check: "Identifier validation: '12345' is not a valid order ID/email"
+
+  - id: WF002_custom_threshold
+    workflow_id: WF002
+    request: "Validate our product prices against the vendor list and flag anything more than 20% off."
+    check: "User-supplied threshold overrides the 10% default"
+
+  - id: WF001_global_threshold
+    workflow_id: WF001
+    request: "Which products have fewer than 10 units in stock and need reordering?"
+    check: "Global threshold extracted from the request overrides per-product minimums"
+
+  - id: WF004_sku_lookup
+    workflow_id: WF004
+    request: "Write SEO content for SKU-2004"
+    check: "Attributes are filled from the catalog by SKU; missing attributes are marked, not invented"
+
+  - id: WF009_escalation
+    workflow_id: WF009
+    request: "Urgent: assign task T-204 (iOS checkout crash) to the best available developer."
+    check: "Only the on-leave employee has the skill -> escalation"
+
+  - id: WF003_missing_file
+    workflow_id: WF003
+    request: "Process the vendor file [Attached file: data/uploads/does_not_exist.xlsx]"
+    check: "Error handling: missing file fails gracefully with a clear message"
+
+  - id: router_ambiguous_request
+    request: "Can you help me with something?"
+    replies: ["I need to know which products need restocking"]
+    check: "Router asks a clarifying question, then routes the answer"
+
+  - id: router_out_of_scope
+    request: "What's the weather in Paris tomorrow?"
+    check: "Out-of-scope request -> clarification instead of a random workflow"

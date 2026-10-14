@@ -1,0 +1,10 @@
+employee_id,name,role,skills,capacity_hours,current_workload_hours,availability
+E01,Aarav Mehta,Senior Backend Developer,python;fastapi;postgresql;aws;docker,40,28,available
+E02,Sofia Martins,Backend Developer,python;django;postgresql;redis,40,18,available
+E03,Liam Chen,Frontend Developer,react;typescript;css;next.js,40,20,available
+E04,Fatima Khan,Full Stack Developer,python;react;fastapi;docker,40,38,available
+E05,Noah Williams,DevOps Engineer,aws;docker;kubernetes;terraform,40,15,available
+E06,Emma Rossi,Mobile Developer,swift;kotlin;flutter,40,10,on_leave
+E07,Oliver Brown,QA Engineer,selenium;python;pytest,40,25,available
+E08,Mia Johnson,Data Engineer,python;spark;sql;airflow,40,39,available
+E09,Lucas Silva,Frontend Developer,react;javascript;css,40,36,available

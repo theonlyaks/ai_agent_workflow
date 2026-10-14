@@ -1,0 +1,10 @@
+sku,product_name,brand,color,unit_cost,quantity,category,validation_warnings
+VND-501,Organic Cotton Hoodie,EcoWear,Sage,18.5,120.0,Apparel,
+VND-502,Bamboo Socks 5-Pack,EcoWear,Mixed,6.2,300.0,Apparel,
+VND-505,Hemp Backpack,TrailGood,Khaki,,60.0,Accessories,
+VND-506,Merino Running Tee,TrailGood,Grey,21.75,150.0,Activewear,
+VND-508,Trail Running Shoes,TrailGood,Orange,48.0,75.0,Footwear,
+VND-509,Packable Rain Poncho,TrailGood,Yellow,12.4,,Outerwear,quantity 'dozens' is not a number
+VND-510,Wool Hiking Socks,TrailGood,Charcoal,7.8,220.0,Apparel,
+VND-511,Insulated Water Bottle,TrailGood,Steel,14.0,140.0,Accessories,
+VND-512,Fleece Neck Gaiter,EcoWear,Navy,5.5,260.0,Accessories,

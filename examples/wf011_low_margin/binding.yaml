@@ -1,0 +1,36 @@
+# Paste this under `workflows:` in config/workflows.yaml. It only reuses existing tools.
+WF011:  # Low Margin Product Alert
+  keywords: [margin, low margin, profit margin, profitability]
+  inputs:
+    - name: product_file
+      description: Path of the product CSV with price and unit_cost
+      default: data/samples/products.csv
+    - name: min_margin_pct
+      type: number
+      description: Minimum acceptable margin in percent, if the user states one (default 55)
+      default: 55
+      extract_pattern: '(\d+(?:\.\d+)?)\s*%'
+  steps:
+    - tool: read_table                                  # 1. Load products
+      args: {path: $inputs.product_file}
+      save_as: products
+    - tool: compute_column                              # 2. Calculate profit margin
+      args: {table: $products, column: margin_pct, expression: "(price - unit_cost) / price * 100", decimals: 1}
+      save_as: with_margin
+    - tool: compare_to_threshold                        # 3. Flag low-margin products
+      args:
+        table: $with_margin
+        value_column: margin_pct
+        operator: "<"
+        threshold_value: $inputs.min_margin_pct
+        flag_column: low_margin
+        mark_flagged: true
+        flag_message: "{count} product(s) have a profit margin below {threshold}%"
+      save_as: checked
+    - calls:                                            # 4. Generate margin report
+        - {tool: filter_rows, args: {table: $checked, where: "low_margin == True"}, save_as: low_margin_rows}
+        - tool: select_columns
+          args: {table: $low_margin_rows, columns: [sku, product_name, category, price, unit_cost, margin_pct], sort_by: margin_pct}
+          save_as: margin_report
+  output:
+    - {title: Low-margin products, source: margin_report}

@@ -1,0 +1,718 @@
+# =============================================================================
+# Workflow bindings - HOW each Excel workflow is executed.
+#
+# The Excel file (data/AI_Agent_Workflow_Assessment.xlsx) is the source of truth for
+# WHAT a workflow is: name, trigger, inputs, steps, decision logic, expected output.
+# This file maps every Excel step (in order, 1:1) to one or more reusable tools.
+#
+#   keywords : extra hints for the offline keyword router (optional)
+#   inputs   : parameters the agent extracts from the user's request
+#   params   : business constants (thresholds, weights...) - change behaviour without code
+#   steps    : one entry per Excel step; `tool:` (single call) or `calls:` (several)
+#   output   : which step results are shown to the user
+#
+# References: $inputs.<name>  $params.<name>  $<save_as>[.<field>]  $metrics.<save_as>.<metric>
+# Everything here is validated at startup (step counts, tool names/args, references).
+# =============================================================================
+version: 1
+
+workflows:
+
+  # ---------------------------------------------------------------------------
+  WF001:  # Inventory Restock Check
+    keywords: [restock, restocking, reorder, reordering, low stock, in stock, stock level, inventory, replenish]
+    inputs:
+      - name: inventory_file
+        description: Path of the product inventory CSV/XLSX
+        default: data/samples/inventory.csv
+      - name: min_stock_threshold
+        type: number
+        description: A single minimum-stock threshold for all products - ONLY if the user states a number. Otherwise each product's own minimum_stock is used.
+        extract_pattern: '(?:fewer than|less than|below|under)\s+(\d+)'
+    params:
+      target_stock_multiplier: 2   # reorder up to 2x the minimum threshold
+    steps:
+      - tool: read_table                                  # 1. Load inventory
+        args: {path: $inputs.inventory_file}
+        save_as: inventory
+      - tool: compare_to_threshold                        # 2. Compare current stock with minimum threshold
+        args:
+          table: $inventory
+          value_column: current_stock
+          operator: "<"
+          threshold_column: minimum_stock
+          threshold_value: $inputs.min_stock_threshold
+          flag_column: needs_restock
+          threshold_output_column: effective_threshold
+          flag_message: "{count} product(s) have current_stock below the minimum threshold"
+        save_as: inventory_checked
+      - tool: filter_rows                                 # 3. Identify low-stock products
+        args: {table: $inventory_checked, where: "needs_restock == True"}
+        save_as: low_stock
+      - tool: compute_column                              # 4. Calculate reorder quantity
+        args:
+          table: $low_stock
+          column: suggested_reorder_qty
+          expression: "effective_threshold * @multiplier - current_stock"
+          variables: {multiplier: $params.target_stock_multiplier}
+          decimals: 0
+        save_as: low_stock_with_qty
+      - tool: select_columns                              # 5. Generate restock list
+        args:
+          table: $low_stock_with_qty
+          columns: [sku, product_name, category, current_stock, effective_threshold, suggested_reorder_qty, supplier, lead_time_days]
+          rename: {effective_threshold: minimum_threshold}
+          sort_by: current_stock
+        save_as: restock_list
+    output:
+      - {title: Products requiring restock, source: restock_list}
+
+  # ---------------------------------------------------------------------------
+  WF002:  # Product Price Validation
+    keywords: [vendor price, price validation, validate price, validate product prices, price difference, prices differ]
+    inputs:
+      - name: product_file
+        description: Path of the internal product/price CSV
+        default: data/samples/products.csv
+      - name: vendor_price_file
+        description: Path of the vendor price list CSV
+        default: data/samples/vendor_prices.csv
+      - name: max_difference_pct
+        type: number
+        description: Allowed price difference in percent, if the user states one (default 10)
+        default: 10
+        extract_pattern: '(\d+(?:\.\d+)?)\s*%'
+    steps:
+      - calls:                                            # 1. Load product prices
+          - {tool: read_table, args: {path: $inputs.product_file}, save_as: products}
+          - {tool: read_table, args: {path: $inputs.vendor_price_file}, save_as: vendor_prices}
+      - calls:                                            # 2. Match products by SKU
+          - tool: join_tables
+            args:
+              left: $products
+              right: $vendor_prices
+              key: sku
+              how: outer
+              indicator_column: match_status
+              left_only_label: missing_from_vendor_list
+              right_only_label: missing_from_internal_catalog
+            save_as: joined
+          - {tool: filter_rows, args: {table: $joined, equals: {match_status: matched}}, save_as: matched}
+          - {tool: filter_rows, args: {table: $joined, where: "match_status != 'matched'"}, save_as: unmatched_rows}
+          - tool: select_columns
+            args: {table: $unmatched_rows, columns: [sku, product_name, price, vendor_price, match_status]}
+            save_as: unmatched
+      - tool: compute_column                              # 3. Compare internal and vendor prices
+        args: {table: $matched, column: price_difference, expression: "vendor_price - price", decimals: 2}
+        save_as: compared
+      - tool: compute_column                              # 4. Calculate percentage difference
+        args: {table: $compared, column: difference_pct, expression: "(vendor_price - price) / price * 100", decimals: 2}
+        save_as: with_pct
+      - calls:                                            # 5. Flag exceptions
+          - {tool: compute_column, args: {table: $with_pct, column: abs_difference_pct, expression: "abs(difference_pct)", decimals: 2}, save_as: with_abs}
+          - tool: compare_to_threshold
+            args:
+              table: $with_abs
+              value_column: abs_difference_pct
+              operator: ">"
+              threshold_value: $inputs.max_difference_pct
+              flag_column: is_exception
+              mark_flagged: true
+              flag_message: "{count} product(s) differ from the vendor price by more than {threshold}%"
+            save_as: validated
+          - tool: select_columns
+            args:
+              table: $validated
+              sort_by: abs_difference_pct
+              ascending: false
+              columns: [sku, product_name, price, vendor_price, price_difference, difference_pct, is_exception]
+              rename: {price: internal_price}
+            save_as: validation_report
+          - {tool: filter_rows, args: {table: $validation_report, where: "is_exception == True"}, save_as: exceptions}
+    output:
+      - {title: Price exceptions, source: exceptions}
+      - {title: Validation report (all matched products), source: validation_report}
+      - {title: SKUs that could not be matched, source: unmatched}
+
+  # ---------------------------------------------------------------------------
+  WF003:  # Vendor File Processing
+    keywords: [vendor file, vendor spreadsheet, process this, process file, invalid rows, clean the file, uploaded file]
+    inputs:
+      - name: file_path
+        description: "Path of the uploaded vendor CSV/XLSX file (look for '[Attached file ...]' in the request)"
+        default: data/samples/vendor_upload.xlsx
+        announce_default: true
+        extract_pattern: '\[Attached file:\s*([^\]]+)\]'
+    params:
+      required_fields: [sku, product_name]
+      numeric_fields: [unit_cost, quantity]
+      column_aliases:
+        sku: [item code, item_code, product code, code, item no, item number, article number, vendor sku]
+        product_name: [product title, title, name, item name, product, description]
+        brand: [brand name, manufacturer, make]
+        color: [colour, color name]
+        unit_cost: [cost, unit cost, unit price, price, cost price]
+        quantity: [qty, qty available, stock, available quantity, units]
+        category: [product category, type, department]
+    steps:
+      - tool: read_table                                  # 1. Read file
+        args: {path: $inputs.file_path}
+        save_as: raw
+      - tool: detect_columns                              # 2. Detect columns
+        args: {table: $raw, aliases: $params.column_aliases}
+        save_as: column_mapping
+      - tool: rename_columns                              # 3. Normalize column names
+        args: {table: $raw, mapping: $column_mapping}
+        save_as: normalized
+      - tool: validate_rows                               # 4. Validate required fields
+        args: {table: $normalized, required_columns: $params.required_fields, numeric_columns: $params.numeric_fields}
+        save_as: validated
+      - tool: filter_rows                                 # 5. Identify invalid rows
+        args: {table: $validated, where: "is_valid == False"}
+        save_as: invalid_rows
+      - calls:                                            # 6. Produce cleaned dataset
+          - {tool: filter_rows, args: {table: $validated, where: "is_valid == True"}, save_as: valid_rows}
+          - {tool: select_columns, args: {table: $valid_rows, drop: [is_valid, validation_errors]}, save_as: cleaned}
+          - {tool: export_table, args: {table: $cleaned, filename: cleaned_vendor_file.csv}, save_as: cleaned_file}
+          - tool: build_record
+            args:
+              fields:
+                total_rows: $metrics.validated.total_rows
+                valid_rows: $metrics.validated.valid_rows
+                invalid_rows: $metrics.validated.invalid_rows
+                rows_with_warnings: $metrics.validated.rows_with_warnings
+                columns_detected: $column_mapping
+                cleaned_file: $cleaned_file
+            save_as: validation_summary
+    output:
+      - {title: Validation summary, source: validation_summary}
+      - {title: Invalid rows, source: invalid_rows}
+      - {title: Cleaned dataset, source: cleaned}
+
+  # ---------------------------------------------------------------------------
+  WF004:  # Product Description Generator
+    keywords: [product description, seo content, product content, seo title, meta description, write copy, generate content]
+    inputs:
+      - {name: product_name, description: Name of the product}
+      - {name: sku, description: Product SKU if the user referenced one (e.g. SKU-2001), extract_pattern: '\b(SKU-\d+)\b'}
+      - {name: category, description: Product category}
+      - {name: attributes, description: "Other product attributes/features stated by the user (fit, sizes, features)"}
+      - {name: material, description: Material}
+      - {name: color, description: Color}
+      - {name: target_audience, description: Target audience}
+    params:
+      short_description_max_chars: 200
+      seo_title_max_chars: 60
+      meta_description_max_chars: 160
+    steps:
+      - calls:                                            # 1. Validate required attributes
+          - tool: enrich_from_table   # fill gaps from the product catalog when the SKU/name is known
+            args:
+              record: $inputs
+              table: data/samples/products.csv
+              key_field: sku
+              key_column: sku
+              fuzzy_field: product_name
+              fuzzy_column: product_name
+              fields: {sku: sku, product_name: product_name, category: category, material: material, color: color, target_audience: target_audience}
+            save_as: product
+          - tool: validate_fields
+            args:
+              record: $product
+              required: [product_name]
+              recommended: [category, attributes, material, color, target_audience]
+              question: "Which product should I write content for? Please share the product name (or SKU) and any details you have: category, material, color, key attributes and target audience."
+            save_as: attribute_check
+      - tool: llm_generate                                # 2. Create product description
+        args:
+          prompt: product_content
+          variables:
+            task: "Write the full product description (80-150 words, 1-2 short paragraphs)."
+            product: $attribute_check.provided
+            missing: $attribute_check.missing_recommended
+          schema: {description: "string | Full product description"}
+        save_as: description
+      - calls:                                            # 3. Generate short description
+          - tool: llm_generate
+            args:
+              prompt: product_content
+              variables:
+                task: "Write a short description (1-2 sentences, max 200 characters) for product listings."
+                product: $attribute_check.provided
+                missing: $attribute_check.missing_recommended
+                context: $description.description
+              schema: {short_description: "string | Max 200 characters"}
+            save_as: short
+          - {tool: validate_text, args: {text: $short.short_description, field: short_description, max_chars: $params.short_description_max_chars}, save_as: short_description}
+      - calls:                                            # 4. Generate SEO title
+          - tool: llm_generate
+            args:
+              prompt: product_content
+              variables:
+                task: "Write an SEO page title, max 60 characters, with the main keyword first."
+                product: $attribute_check.provided
+                missing: $attribute_check.missing_recommended
+                context: $description.description
+              schema: {seo_title: "string | Max 60 characters"}
+            save_as: seo
+          - {tool: validate_text, args: {text: $seo.seo_title, field: seo_title, max_chars: $params.seo_title_max_chars}, save_as: seo_title}
+      - calls:                                            # 5. Generate meta description
+          - tool: llm_generate
+            args:
+              prompt: product_content
+              variables:
+                task: "Write an SEO meta description, 120-160 characters, with a soft call to action."
+                product: $attribute_check.provided
+                missing: $attribute_check.missing_recommended
+                context: $description.description
+              schema: {meta_description: "string | 120-160 characters"}
+            save_as: meta
+          - {tool: validate_text, args: {text: $meta.meta_description, field: meta_description, max_chars: $params.meta_description_max_chars}, save_as: meta_description}
+          - tool: build_record
+            args:
+              fields:
+                product: $product.product_name
+                sku: $product.sku
+                product_description: $description.description
+                short_description: $short_description
+                seo_title: $seo_title
+                meta_description: $meta_description
+                missing_information: $attribute_check.missing_recommended
+            save_as: content
+    output:
+      - {title: Generated product content, source: content}
+      - {title: Product facts used, source: attribute_check}
+
+  # ---------------------------------------------------------------------------
+  WF005:  # Customer Order Status
+    keywords: [order status, where is order, where is my order, track order, tracking, shipment, delivery, order]
+    inputs:
+      - name: identifier
+        description: Order ID (e.g. ORD-1001) or the customer's email address
+        extract_pattern: '(ORD-\d+|[\w.+-]+@[\w-]+\.[\w.-]+)'
+    params:
+      identifier_patterns:
+        order_id: '^ORD-\d{4,}$'
+        email: '^[\w.+-]+@[\w-]+\.[\w.-]+$'
+    steps:
+      - tool: validate_identifier                         # 1. Validate identifier
+        args:
+          value: $inputs.identifier
+          patterns: $params.identifier_patterns
+          normalize: {order_id: upper, email: lower}
+          question: "Please share your order ID (e.g. ORD-1001) or the email address used for the order."
+        save_as: identifier
+      - tool: search_orders                               # 2. Search order data
+        args: {identifier: $identifier}
+        retry: {attempts: 3, backoff_seconds: 0.3}
+        save_as: orders
+      - tool: get_order_status                            # 3. Retrieve order status
+        args: {orders: $orders}
+        save_as: order_status
+      - tool: track_shipments                             # 4. Retrieve shipment information
+        args: {orders: $orders}
+        retry: {attempts: 3, backoff_seconds: 0.3}
+        save_as: shipments
+      - tool: summarize_order_status                      # 5. Summarize current status
+        args: {order_status: $order_status, shipments: $shipments}
+        save_as: status_summary
+    output:
+      - {title: Order status, source: status_summary}
+
+  # ---------------------------------------------------------------------------
+  WF006:  # Duplicate Product Detection
+    keywords: [duplicate, duplicates, dedupe, deduplicate, similar products, catalog cleanup]
+    inputs:
+      - name: catalog_file
+        description: Path of the product catalog CSV/XLSX
+        default: data/samples/product_catalog.csv
+    params:
+      attribute_columns: [brand, color, size, material]
+      min_name_score: 85          # fuzzy name similarity (0-100) to be a candidate
+      min_attribute_match: 0.75   # share of attributes that must match
+      high_name_score: 95
+    steps:
+      - tool: read_table                                  # 1. Load products
+        args: {path: $inputs.catalog_file}
+        save_as: catalog
+      - tool: normalize_text_columns                      # 2. Normalize names/SKUs
+        args: {table: $catalog, text_columns: [product_name], identifier_columns: [sku]}
+        save_as: normalized
+      - tool: find_exact_matches                          # 3. Compare identifiers
+        args: {table: $normalized, key_column: sku_norm, text_column: product_name_norm, attribute_columns: $params.attribute_columns}
+        save_as: sku_matches
+      - tool: find_similar_pairs                          # 4. Compare product attributes
+        args:
+          table: $normalized
+          text_column: product_name_norm
+          attribute_columns: $params.attribute_columns
+          min_name_score: $params.min_name_score
+          min_attribute_match: $params.min_attribute_match
+          block_by: category
+          exclude_pairs: $sku_matches
+        save_as: similar_pairs
+      - tool: group_pairs                                 # 5. Group likely duplicates
+        args: {table: $normalized, pairs: [$sku_matches, $similar_pairs], id_column: sku, label_column: product_name}
+        save_as: groups
+      - tool: assign_label                                # 6. Assign confidence
+        args:
+          table: $groups
+          column: confidence
+          rules:
+            - {when: "has_exact_id_match == True", label: "Definite duplicate (exact SKU match)"}
+            - {when: "name_similarity >= @high and attribute_match >= 1.0", label: "Possible duplicate - high confidence"}
+          default: "Possible duplicate - medium confidence"
+          variables: {high: $params.high_name_score}
+        save_as: duplicate_groups
+    output:
+      - {title: Duplicate groups, source: duplicate_groups}
+
+  # ---------------------------------------------------------------------------
+  WF007:  # Marketing Campaign Brief
+    keywords: [campaign, campaign brief, marketing brief, promotion plan, launch plan]
+    inputs:
+      - {name: campaign_goal, description: The business goal of the campaign (e.g. increase online sales by 20%)}
+      - {name: products, description: "Products, product list or collection to feature (e.g. 'new collection', 'Autumn 2026')"}
+      - {name: target_audience, description: Target audience}
+      - {name: promotion, description: Promotion / offer (e.g. 15% off)}
+      - {name: start_date, description: Campaign start date (ISO format YYYY-MM-DD if possible)}
+      - {name: end_date, description: Campaign end date (ISO format YYYY-MM-DD if possible)}
+    params:
+      product_file: data/samples/products.csv
+    steps:
+      - tool: validate_fields                             # 1. Validate inputs
+        args:
+          record: $inputs
+          required: [campaign_goal, start_date, end_date]
+          recommended: [products, target_audience, promotion]
+          question: "Before I write the brief I need the {missing}. What is the campaign goal, and when does the campaign start and end? (Audience and promotion details are welcome too.)"
+        save_as: input_check
+      - tool: llm_generate                                # 2. Identify campaign objective
+        args:
+          prompt: campaign_objective
+          variables: {goal: $inputs.campaign_goal, audience: $inputs.target_audience, promotion: $inputs.promotion, start_date: $inputs.start_date, end_date: $inputs.end_date}
+          schema:
+            objective: "string | One SMART objective sentence"
+            primary_kpi: string
+            supporting_kpis: [string]
+        save_as: objective
+      - calls:                                            # 3. Summarize products
+          - {tool: read_table, args: {path: $params.product_file}, save_as: catalog}
+          - {tool: search_table, args: {table: $catalog, query: $inputs.products, columns: [product_name, collection, tags, category]}, save_as: featured_all}
+          - {tool: select_columns, args: {table: $featured_all, columns: [sku, product_name, category, color, material, price, collection]}, save_as: featured}
+          - {tool: summarize_table, args: {table: $featured, label_column: product_name, group_by: category, numeric_columns: [price]}, save_as: product_summary}
+      - tool: llm_generate                                # 4. Create messaging
+        args:
+          prompt: campaign_messaging
+          variables: {objective: $objective, products: $featured, audience: $inputs.target_audience, promotion: $inputs.promotion}
+          schema:
+            key_message: string
+            tagline: "string | Max 8 words"
+            supporting_messages: [string]
+            call_to_action: string
+        save_as: messaging
+      - tool: llm_generate                                # 5. Create channel recommendations
+        args:
+          prompt: campaign_channels
+          variables: {objective: $objective, messaging: $messaging, audience: $inputs.target_audience, promotion: $inputs.promotion, start_date: $inputs.start_date, end_date: $inputs.end_date}
+          schema:
+            channels:
+              - channel: string
+                rationale: string
+                content_ideas: [string]
+                budget_share_pct: integer
+        save_as: channels
+      - calls:                                            # 6. Create campaign checklist
+          - tool: llm_generate
+            args:
+              prompt: campaign_checklist
+              variables: {objective: $objective, channels: $channels, start_date: $inputs.start_date, end_date: $inputs.end_date}
+              schema:
+                timeline:
+                  - {date: string, milestone: string}
+                checklist:
+                  - {task: string, owner: string, due_date: string}
+            save_as: plan
+          - tool: build_record
+            args:
+              fields:
+                campaign_goal: $inputs.campaign_goal
+                objective: $objective.objective
+                primary_kpi: $objective.primary_kpi
+                supporting_kpis: $objective.supporting_kpis
+                target_audience: $inputs.target_audience
+                promotion: $inputs.promotion
+                start_date: $inputs.start_date
+                end_date: $inputs.end_date
+                featured_products: $product_summary
+                key_message: $messaging.key_message
+                tagline: $messaging.tagline
+                supporting_messages: $messaging.supporting_messages
+                call_to_action: $messaging.call_to_action
+            save_as: brief
+    output:
+      - {title: Campaign brief, source: brief}
+      - {title: Channel recommendations, source: channels}
+      - {title: Timeline and checklist, source: plan}
+      - {title: Featured products, source: featured}
+
+  # ---------------------------------------------------------------------------
+  WF008:  # SEO Keyword Classification
+    keywords: [keywords, keyword list, search intent, classify keywords, keyword report, map keywords]
+    inputs:
+      - name: keyword_file
+        description: "Path of the keyword CSV (look for '[Attached file ...]' in the request)"
+        default: data/samples/keywords.csv
+        announce_default: true
+        extract_pattern: '\[Attached file:\s*([^\]]+)\]'
+      - name: category_file
+        description: Path of the product category / page list CSV
+        default: data/samples/categories.csv
+    params:
+      intents: [informational, commercial, transactional, navigational]
+      intent_descriptions:
+        informational: the searcher wants to learn something (how to, what is, guides)
+        commercial: the searcher is comparing or researching before buying (best, vs, reviews)
+        transactional: the searcher wants to buy now (buy, price, discount, sale, order)
+        navigational: the searcher wants a specific brand page or site section (login, store, policy)
+      high_volume: 1000
+      medium_volume: 400
+    steps:
+      - calls:                                            # 1. Read keywords
+          - {tool: read_table, args: {path: $inputs.keyword_file}, save_as: keywords_raw}
+          - {tool: read_table, args: {path: $inputs.category_file}, save_as: categories}
+      - tool: drop_duplicate_rows                         # 2. Remove duplicates
+        args: {table: $keywords_raw, subset: [keyword]}
+        save_as: keywords
+      - tool: llm_classify                                # 3. Classify search intent
+        args:
+          table: $keywords
+          text_column: keyword
+          labels: $params.intents
+          label_descriptions: $params.intent_descriptions
+          output_column: intent
+          instructions: Classify the search intent of each e-commerce search keyword.
+        save_as: with_intent
+      - calls:                                            # 4. Map keywords to categories
+          - tool: llm_classify
+            args:
+              table: $with_intent
+              text_column: keyword
+              labels: $categories
+              label_column: category
+              output_column: category
+              instructions: "Map each keyword of a fashion e-commerce store to the product category it is about. Use 'Brand & Customer Service' for brand, account, store and policy searches."
+            save_as: with_category
+          - {tool: join_tables, args: {left: $with_category, right: $categories, key: category, how: left}, save_as: mapped}
+      - calls:                                            # 5. Identify high-priority keywords
+          - tool: assign_label
+            args:
+              table: $mapped
+              column: priority
+              rules:
+                - {when: "intent in ['transactional', 'commercial'] and search_volume >= @high", label: High}
+                - {when: "intent in ['transactional', 'commercial'] or search_volume >= @medium", label: Medium}
+              default: Low
+              variables: {high: $params.high_volume, medium: $params.medium_volume}
+            save_as: prioritized
+          - tool: assign_label
+            args:
+              table: $prioritized
+              column: recommended_target_page
+              rules:
+                - {when: "intent == 'informational'", label: {column: guide_page}}
+              default: {column: target_page}
+            save_as: with_pages
+          - {tool: filter_rows, args: {table: $with_pages, equals: {priority: High}}, save_as: high_priority_rows}
+          - tool: select_columns
+            args:
+              table: $high_priority_rows
+              columns: [keyword, search_volume, intent, category, recommended_target_page]
+              sort_by: search_volume
+              ascending: false
+            save_as: high_priority
+      - calls:                                            # 6. Export results
+          - tool: select_columns
+            args:
+              table: $with_pages
+              columns: [keyword, search_volume, intent, category, priority, recommended_target_page]
+              sort_by: [priority, search_volume]
+              ascending: [true, false]
+              custom_order: {priority: [High, Medium, Low]}
+            save_as: keyword_report
+          - {tool: export_table, args: {table: $keyword_report, filename: keyword_report.csv}, save_as: report_file}
+    output:
+      - {title: High-priority keywords, source: high_priority}
+      - {title: Keyword report, source: keyword_report}
+      - {title: Exported file, source: report_file}
+
+  # ---------------------------------------------------------------------------
+  WF009:  # Employee Task Assignment
+    keywords: [assign, assignment, assign task, best available, developer, who should work on]
+    inputs:
+      - {name: task, description: "The task to assign: a backlog task ID (e.g. T-201) or a description of the work", extract_pattern: '\b(T-\d+)\b'}
+      - {name: role, description: "Role/team to choose from if stated (e.g. 'developer', 'engineer')"}
+      - {name: priority, description: "Priority if stated: urgent, high, medium or low"}
+      - {name: deadline, description: Deadline if stated}
+      - {name: employee_file, description: Employee list CSV, default: data/samples/employees.csv}
+      - {name: task_file, description: Task backlog CSV, default: data/samples/tasks.csv}
+    params:
+      min_skill_match: 0.6       # must have at least 60% of the required skills
+      weights: {skill_match: 0.6, capacity_score: 0.4}
+      weights_by_priority:
+        urgent: {skill_match: 0.5, capacity_score: 0.5}   # urgent work favours free capacity more
+    steps:
+      - calls:                                            # 1. Understand task requirements
+          - {tool: read_table, args: {path: $inputs.task_file}, save_as: backlog}
+          - tool: validate_fields
+            args:
+              record: $inputs
+              required: [task]
+              question: "Which task should I assign? Reply with a backlog task ID, or describe the work (skills needed, effort and deadline)."
+              suggestions: $backlog
+              suggestion_columns: [task_id, title, priority, deadline]
+            save_as: task_check
+          - {tool: read_table, args: {path: $inputs.employee_file}, save_as: employees}
+          - tool: llm_generate
+            args:
+              prompt: task_requirements
+              variables: {task: $inputs.task, priority_hint: $inputs.priority, deadline_hint: $inputs.deadline, backlog: $backlog, known_skills: $employees.skills}
+              schema:
+                task_id: "string | Matching backlog task id, or empty string"
+                title: string
+                required_skills: [string]
+                estimated_hours: number
+                priority: {enum: [urgent, high, medium, low]}
+                deadline: "string | ISO date or 'not specified'"
+            save_as: requirements
+      - calls:                                            # 2. Compare employee skills
+          - {tool: filter_rows, args: {table: $employees, contains: {role: $inputs.role}}, save_as: pool}
+          - {tool: skill_match, args: {table: $pool, required_skills: $requirements.required_skills}, save_as: skilled}
+      - calls:                                            # 3. Check current workload
+          - {tool: compute_column, args: {table: $skilled, column: available_hours, expression: "capacity_hours - current_workload_hours", clip_min: 0}, save_as: w1}
+          - {tool: compute_column, args: {table: $w1, column: capacity_score, expression: "available_hours / capacity_hours", decimals: 2}, save_as: w2}
+          - {tool: compute_column, args: {table: $w2, column: is_available, expression: "availability == 'available'"}, save_as: workload}
+      - calls:                                            # 4. Rank candidates
+          - {tool: rank_rows, args: {table: $workload, weights: $params.weights, priority: $requirements.priority, weights_by_priority: $params.weights_by_priority}, save_as: ranked}
+          - tool: select_columns
+            args: {table: $ranked, columns: [rank, name, role, skill_match, matched_skills, missing_skills, available_hours, availability, score]}
+            save_as: ranking
+      - tool: select_best                                 # 5. Select employee
+        args:
+          table: $ranked
+          where: "is_available and skill_match >= @min_skill and available_hours >= @hours"
+          variables: {min_skill: $params.min_skill_match, hours: $requirements.estimated_hours}
+          empty_message: "No available employee has the required skills and enough free capacity for this task - escalated to the engineering manager for a decision (re-prioritise work, extend the deadline or bring in outside help)."
+        save_as: selection
+      - calls:                                            # 6. Generate assignment summary
+          - tool: llm_generate
+            args:
+              prompt: assignment_summary
+              variables: {task: $requirements, selected: $selection.selected, alternatives: $selection.alternatives}
+              schema: {summary: "string | 2-3 sentences", reasoning: "string | Why this person, based on the data"}
+            save_as: assignment_text
+          - tool: build_record
+            args:
+              fields:
+                recommended_employee: $selection.selected.name
+                employee_id: $selection.selected.employee_id
+                role: $selection.selected.role
+                task: $requirements.title
+                task_id: $requirements.task_id
+                priority: $requirements.priority
+                deadline: $requirements.deadline
+                estimated_hours: $requirements.estimated_hours
+                matched_skills: $selection.selected.matched_skills
+                available_hours: $selection.selected.available_hours
+                score: $selection.selected.score
+                reasoning: $assignment_text.reasoning
+                summary: $assignment_text.summary
+            save_as: assignment
+    output:
+      - {title: Recommended assignment, source: assignment}
+      - {title: Candidate ranking, source: ranking}
+      - {title: Task requirements, source: requirements}
+
+  # ---------------------------------------------------------------------------
+  WF010:  # Workflow Performance Report
+    keywords: [performance report, failing, failure rate, workflow performance, slow steps, execution logs, errors]
+    inputs:
+      - name: log_file
+        description: Path of the historical execution log CSV
+        default: data/samples/execution_logs.csv
+    params:
+      max_failure_rate_pct: 10
+      max_avg_duration_ms: 10000   # "defined threshold" for average run time
+      slow_step_ms: 3000
+    steps:
+      - calls:                                            # 1. Load execution logs
+          - {tool: load_execution_logs, args: {path: $inputs.log_file}, save_as: logs}
+          - {tool: compute_column, args: {table: $logs, column: is_failed, expression: "status == 'failed'"}, save_as: logs_flagged}
+          - tool: aggregate
+            args:
+              table: $logs_flagged
+              group_by: [run_id, workflow_id, workflow_name]
+              metrics: {failed: [is_failed, max], duration_ms: [duration_ms, sum]}
+            save_as: runs
+      - calls:                                            # 2. Calculate success/failure rate
+          - tool: aggregate
+            args:
+              table: $runs
+              group_by: [workflow_id, workflow_name]
+              metrics: {runs: [run_id, count], failures: [failed, sum], failure_rate_pct: [failed, mean]}
+            save_as: rates
+          - {tool: compute_column, args: {table: $rates, column: failure_rate_pct, expression: "failure_rate_pct * 100", decimals: 1}, save_as: rates_pct}
+          - {tool: compute_column, args: {table: $rates_pct, column: success_rate_pct, expression: "100 - failure_rate_pct", decimals: 1}, save_as: rates_final}
+      - calls:                                            # 3. Calculate average execution time
+          - tool: aggregate
+            args: {table: $runs, group_by: workflow_id, metrics: {avg_duration_ms: [duration_ms, mean], max_duration_ms: [duration_ms, max]}}
+            save_as: durations
+          - {tool: join_tables, args: {left: $rates_final, right: $durations, key: workflow_id, how: left}, save_as: metrics_table}
+      - calls:                                            # 4. Identify frequent errors
+          - {tool: filter_rows, args: {table: $logs_flagged, where: "is_failed == True"}, save_as: failures}
+          - tool: aggregate
+            args: {table: $failures, group_by: [workflow_id, step, error], metrics: {occurrences: [run_id, count]}, sort_by: occurrences, limit: 10}
+            save_as: frequent_errors
+      - calls:                                            # 5. Identify slow steps
+          - tool: aggregate
+            args: {table: $logs, group_by: [workflow_id, step], metrics: {avg_duration_ms: [duration_ms, mean], executions: [run_id, count]}, sort_by: avg_duration_ms}
+            save_as: step_times
+          - {tool: filter_rows, args: {table: $step_times, where: "avg_duration_ms > @slow", variables: {slow: $params.slow_step_ms}}, save_as: slow_steps}
+      - calls:                                            # 6. Generate recommendations
+          - tool: assign_label
+            args:
+              table: $metrics_table
+              column: health
+              rules:
+                - {when: "failure_rate_pct > @fail and avg_duration_ms > @slow", label: "FLAG: high failure rate + slow"}
+                - {when: "failure_rate_pct > @fail", label: "FLAG: high failure rate"}
+                - {when: "avg_duration_ms > @slow", label: "FLAG: slow"}
+              default: Healthy
+              variables: {fail: $params.max_failure_rate_pct, slow: $params.max_avg_duration_ms}
+              mark_flagged: true
+              flag_message: "{count} workflow(s) breach a threshold (failure rate > {fail}% or average run time > {slow} ms)"
+            save_as: health
+          - tool: select_columns
+            args:
+              table: $health
+              columns: [workflow_id, workflow_name, runs, failures, failure_rate_pct, success_rate_pct, avg_duration_ms, max_duration_ms, health]
+              sort_by: failure_rate_pct
+              ascending: false
+            save_as: performance
+          - tool: llm_generate
+            continue_on_error: true   # the metrics report is still useful without LLM advice
+            args:
+              prompt: performance_recommendations
+              variables: {metrics: $performance, errors: $frequent_errors, slow_steps: $slow_steps, thresholds: $params}
+              schema:
+                recommendations:
+                  - workflow_id: string
+                    issue: string
+                    recommendation: string
+                    priority: {enum: [high, medium, low]}
+            save_as: recommendations
+    output:
+      - {title: Workflow performance (sorted by failure rate), source: performance}
+      - {title: Most frequent errors, source: frequent_errors}
+      - {title: Slow steps, source: slow_steps}
+      - {title: Recommendations, source: recommendations}

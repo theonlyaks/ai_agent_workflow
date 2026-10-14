@@ -1,0 +1,30 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+build/
+dist/
+
+# Runtime artefacts
+logs/*
+!logs/.gitkeep
+data/uploads/*
+!data/uploads/.gitkeep
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Personal notes (not part of the submission)
+LOOM_NOTES.md
+
+# Local tooling
+.claude/

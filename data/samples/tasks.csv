@@ -1,0 +1,6 @@
+task_id,title,required_skills,priority,deadline,estimated_hours
+T-201,Fix payment API timeouts under peak load,python;fastapi;postgresql,urgent,2026-10-16,6
+T-202,Build the new product filter UI,react;typescript,high,2026-10-24,16
+T-203,Move CI pipelines to GitHub Actions,docker;aws,medium,2026-11-05,12
+T-204,iOS app crashes on checkout,swift,urgent,2026-10-15,8
+T-205,Nightly sales data pipeline is failing,python;airflow;sql,high,2026-10-18,5

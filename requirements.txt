@@ -1,0 +1,15 @@
+# Pinned versions the project was built and tested with (Python 3.11+ / tested on 3.12)
+anthropic==1.13.0
+langgraph==1.2.15
+streamlit==1.65.0
+pandas==3.0.6
+openpyxl==3.1.5
+rapidfuzz==3.14.6
+pydantic==2.14.1
+pydantic-settings==2.15.0
+PyYAML==6.0.3
+python-dotenv==1.2.4
+pytest==9.1.1
+
+# Install this project itself (src/ layout) in editable mode
+-e .

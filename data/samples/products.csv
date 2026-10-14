@@ -1,0 +1,23 @@
+sku,product_name,category,brand,color,material,price,unit_cost,collection,tags,target_audience
+SKU-1001,Classic Cotton T-Shirt,Apparel,Northwind,White,Cotton,19.99,6.5,Core,basics; tee,
+SKU-1002,Classic Cotton T-Shirt,Apparel,Northwind,Black,Cotton,19.99,6.5,Core,basics; tee,
+SKU-1003,Slim Fit Denim Jeans,Apparel,Northwind,Indigo,Denim,59.0,22.0,Core,denim,
+SKU-1004,Wool Blend Sweater,Apparel,Northwind,Oatmeal,Wool blend,79.0,30.0,Core,knitwear,
+SKU-1005,Leather Belt,Accessories,Northwind,Brown,Leather,35.0,9.0,Core,leather goods,
+SKU-1006,Canvas Tote Bag,Accessories,Northwind,Natural,Canvas,24.0,7.0,Core,bags,
+SKU-1007,Running Sneakers,Footwear,Stride,Black,Mesh,89.0,41.0,Core,running; shoes,
+SKU-1008,Hiking Boots,Footwear,Stride,Brown,Leather,129.0,58.0,Core,outdoor; boots,
+SKU-1009,Silk Scarf,Accessories,Northwind,Navy,Silk,45.0,12.0,Summer 2026,scarves,
+SKU-1010,Waterproof Rain Jacket,Outerwear,Northwind,Olive,Nylon,110.0,70.0,Core,rainwear,
+SKU-1011,Puffer Vest,Outerwear,Northwind,Black,Recycled polyester,85.0,33.0,Core,layering,
+SKU-1012,Linen Shirt,Apparel,Northwind,White,Linen,49.0,18.0,Summer 2026,summer,
+SKU-1013,Baseball Cap,Accessories,Northwind,Navy,Cotton twill,22.0,5.0,Core,headwear,
+SKU-1014,Ankle Socks (3-Pack),Apparel,Northwind,Grey,Cotton blend,12.0,3.5,Core,basics,
+SKU-1015,Yoga Leggings,Activewear,Flexa,Black,Nylon spandex,55.0,20.0,Core,yoga,Women who train
+SKU-1016,Sports Bra,Activewear,Flexa,Teal,Nylon spandex,39.0,14.0,Core,training,Women who train
+SKU-2001,Merino Wool Turtleneck,Knitwear,Northwind,Charcoal,Merino wool,95.0,38.0,Autumn 2026,new collection; new arrival; autumn 2026,
+SKU-2002,Corduroy Overshirt,Apparel,Northwind,Rust,Cotton corduroy,75.0,29.0,Autumn 2026,new collection; new arrival; autumn 2026,
+SKU-2003,Quilted Shacket,Outerwear,Northwind,Forest green,Recycled polyester,120.0,52.0,Autumn 2026,new collection; new arrival; autumn 2026,
+SKU-2004,Chelsea Boots,Footwear,Stride,Dark brown,Suede,140.0,61.0,Autumn 2026,new collection; new arrival; autumn 2026,
+SKU-2005,Cashmere Beanie,Accessories,Northwind,Camel,Cashmere,49.0,21.0,Autumn 2026,new collection; new arrival; autumn 2026,
+SKU-2006,Plaid Wool Scarf,Accessories,Northwind,Red plaid,Wool,59.0,26.0,Autumn 2026,new collection; new arrival; autumn 2026,

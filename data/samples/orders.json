@@ -1,0 +1,94 @@
+[
+  {
+    "order_id": "ORD-1001",
+    "customer_name": "Jane Doe",
+    "customer_email": "jane.doe@example.com",
+    "order_date": "2026-10-09",
+    "status": "Shipped",
+    "shipment_id": "SHP-5001",
+    "items": [
+      {
+        "sku": "SKU-1004",
+        "name": "Wool Blend Sweater",
+        "quantity": 1,
+        "unit_price": 79.0
+      },
+      {
+        "sku": "SKU-1013",
+        "name": "Baseball Cap",
+        "quantity": 2,
+        "unit_price": 22.0
+      }
+    ]
+  },
+  {
+    "order_id": "ORD-1002",
+    "customer_name": "Jane Doe",
+    "customer_email": "jane.doe@example.com",
+    "order_date": "2026-10-13",
+    "status": "Processing",
+    "shipment_id": null,
+    "items": [
+      {
+        "sku": "SKU-2001",
+        "name": "Merino Wool Turtleneck",
+        "quantity": 1,
+        "unit_price": 95.0
+      }
+    ]
+  },
+  {
+    "order_id": "ORD-1003",
+    "customer_name": "Alex Kim",
+    "customer_email": "alex.kim@example.com",
+    "order_date": "2026-10-02",
+    "status": "Delivered",
+    "shipment_id": "SHP-5002",
+    "items": [
+      {
+        "sku": "SKU-1007",
+        "name": "Running Sneakers",
+        "quantity": 1,
+        "unit_price": 89.0
+      }
+    ]
+  },
+  {
+    "order_id": "ORD-1004",
+    "customer_name": "Priya Shah",
+    "customer_email": "priya.shah@example.com",
+    "order_date": "2026-10-08",
+    "status": "Cancelled",
+    "shipment_id": null,
+    "items": [
+      {
+        "sku": "SKU-1010",
+        "name": "Waterproof Rain Jacket",
+        "quantity": 1,
+        "unit_price": 110.0
+      }
+    ]
+  },
+  {
+    "order_id": "ORD-1005",
+    "customer_name": "Sam Lee",
+    "customer_email": "sam.lee@example.com",
+    "order_date": "2026-10-06",
+    "status": "Shipped",
+    "shipment_id": "SHP-5003",
+    "items": [
+      {
+        "sku": "SKU-1008",
+        "name": "Hiking Boots",
+        "quantity": 1,
+        "unit_price": 129.0
+      },
+      {
+        "sku": "SKU-1014",
+        "name": "Ankle Socks (3-Pack)",
+        "quantity": 3,
+        "unit_price": 12.0
+      }
+    ]
+  }
+]

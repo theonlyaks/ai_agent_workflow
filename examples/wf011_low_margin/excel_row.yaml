@@ -1,0 +1,9 @@
+# The new row to add to the "Workflows" sheet of the Excel file (one value per column).
+Workflow_ID: WF011
+Workflow_Name: Low Margin Product Alert
+Trigger: User asks which products have a low profit margin
+Inputs: Product CSV with price and unit cost; minimum margin percentage
+Steps: Load products → calculate profit margin → flag low-margin products → generate margin report
+Decision_Logic: Flag products whose profit margin is below 55%
+Tools_Required: CSV reader; calculator
+Expected_Output: List of low-margin products with price, unit cost and margin percentage

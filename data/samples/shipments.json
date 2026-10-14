@@ -1,0 +1,64 @@
+[
+  {
+    "shipment_id": "SHP-5001",
+    "carrier": "UPS",
+    "tracking_number": "1Z999AA10123456784",
+    "status": "In transit",
+    "estimated_delivery": "2026-10-16",
+    "events": [
+      {
+        "timestamp": "2026-10-10 09:12",
+        "location": "Newark, NJ",
+        "description": "Picked up"
+      },
+      {
+        "timestamp": "2026-10-12 18:40",
+        "location": "Columbus, OH",
+        "description": "Departed facility"
+      },
+      {
+        "timestamp": "2026-10-14 07:05",
+        "location": "Chicago, IL",
+        "description": "Arrived at regional hub"
+      }
+    ]
+  },
+  {
+    "shipment_id": "SHP-5002",
+    "carrier": "FedEx",
+    "tracking_number": "7489 2210 5531",
+    "status": "Delivered",
+    "estimated_delivery": "2026-10-05",
+    "events": [
+      {
+        "timestamp": "2026-10-03 11:00",
+        "location": "Memphis, TN",
+        "description": "In transit"
+      },
+      {
+        "timestamp": "2026-10-05 14:22",
+        "location": "Austin, TX",
+        "description": "Delivered - left at front door"
+      }
+    ]
+  },
+  {
+    "shipment_id": "SHP-5003",
+    "carrier": "DHL",
+    "tracking_number": "JD014600006281234567",
+    "status": "Delayed",
+    "estimated_delivery": "2026-10-17",
+    "events": [
+      {
+        "timestamp": "2026-10-07 10:30",
+        "location": "Leipzig, DE",
+        "description": "Shipment picked up"
+      },
+      {
+        "timestamp": "2026-10-11 16:45",
+        "location": "Cincinnati, OH",
+        "description": "Customs clearance delay"
+      }
+    ]
+  }
+]

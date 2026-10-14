@@ -1,0 +1,19 @@
+sku,product_name,brand,category,color,size,material,price
+SKU-1001,Classic Cotton T-Shirt,Northwind,Apparel,White,M,Cotton,19.99
+sku-1001 ,Classic Cotton Tee,Northwind,Apparel,White,M,Cotton,19.99
+SKU-1003,Slim Fit Denim Jeans,Northwind,Apparel,Indigo,32,Denim,59.0
+SKU-1203,Slim-Fit Denim Jeans,Northwind,Apparel,Indigo,32,Denim,59.0
+SKU-1007,Running Sneakers,Stride,Footwear,Black,42,Mesh,89.0
+SKU-1077,Running Sneaker,Stride,Footwear,Black,42,Mesh / rubber,89.0
+SKU-1010,Waterproof Rain Jacket,Northwind,Outerwear,Olive,L,Nylon,110.0
+SKU-1910,Rain Jacket - Waterproof,Northwind,Outerwear,Olive,L,Nylon,110.0
+SKU-1012,Linen Shirt,Northwind,Apparel,White,M,Linen,49.0
+SKU-1112,Linen Shirt,Northwind,Apparel,Navy,L,Linen,49.0
+SKU-1004,Wool Blend Sweater,Northwind,Apparel,Oatmeal,M,Wool blend,79.0
+SKU-1005,Leather Belt,Northwind,Accessories,Brown,One size,Leather,35.0
+SKU-1006,Canvas Tote Bag,Northwind,Accessories,Natural,One size,Canvas,24.0
+SKU-1008,Hiking Boots,Stride,Footwear,Brown,43,Leather,129.0
+SKU-1015,Yoga Leggings,Flexa,Activewear,Black,S,Nylon spandex,55.0
+SKU-2001,Merino Wool Turtleneck,Northwind,Knitwear,Charcoal,M,Merino wool,95.0
+SKU-2004,Chelsea Boots,Stride,Footwear,Dark brown,42,Suede,140.0
+SKU-2104,Chelsea Boot,Stride,Footwear,Dark brown,42,Suede,140.0
